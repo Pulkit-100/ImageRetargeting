@@ -14,23 +14,15 @@ from .algo import carve_main
 
 def carve(image, height, width):
 
-    img = Image.open(BytesIO(image))
-    name = "temp.jpeg"
-    out = "out.jpeg"
+    pk = BytesIO(image)
+    old = uploader.upload_resource(pk, folder="SeamCarving")
+    pk.flush()
 
-    with open(name, "wb") as fp:
-        pk = img.save(fp)
+    new = carve_main(old.url, height, width)
 
-    old = uploader.upload_resource(BytesIO(image), folder="SeamCarving")
-
-
-
-    carve_main(name, out, height, width)
-
-    with open(out, "rb") as fp:
-        pk = fp.read()
-
+    pk = BytesIO(new)
     image = uploader.upload_resource(pk, folder="SeamCarving")
+    pk.flush()
 
     return (old.url, image.url)
 

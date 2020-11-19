@@ -4,6 +4,8 @@ import cv2
 from numba import jit
 from scipy import ndimage as ndi
 
+import imutils
+
 warnings.filterwarnings("ignore")
 
 
@@ -126,13 +128,13 @@ def seam_carve(im, dy, dx, vis=False):
     return output
 
 
-def carve_main(image,out,height,width):
+def carve_main(image,height,width):
 
     IMAGE = image
-    OUTPUT = out
+    OUTPUT = "out.jpeg"
 
     try:
-        im = cv2.imread(IMAGE)
+        im = imutils.url_to_image(IMAGE)
         h, w = im.shape[:2]
 
         if SHOULD_DOWNSIZE and w > DOWNSIZE_WIDTH:
@@ -152,11 +154,16 @@ def carve_main(image,out,height,width):
 
             output = seam_carve(im, dy, dx, True)
 
-            cv2.imwrite(OUTPUT, output)
+            # cv2.imwrite(OUTPUT, output)
             # cv2.waitKey(0)
+
+            is_success, buffer = cv2.imencode(".jpg", output)
+
+            return buffer
 
         else:
             raise ValueError
 
     except Exception as e:
         print(e)
+
