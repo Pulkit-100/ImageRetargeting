@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <form method="get">
+      <p>Height</p>
+      <input type="text" onchange="loadFile(event)" name="height" id="ht" />
+      <p>width</p>
+      <input type="text" onchange="loadFile(event)" name="width" id="wt" />
+      <p>File</p>
+      <input type="file" name="file-input" onchange="loadFile(event)" />
+
+      <p>Output</p>
+      <img id="output" />
+    </form>
+  </body>
+  <script src="./script.js"></script>
+</html>
