@@ -12,6 +12,7 @@ warnings.filterwarnings("ignore")
 SEAM_COLOR = np.array([255, 200, 200])    # seam visualization color (BGR)
 SHOULD_DOWNSIZE = True                    # if True, downsize image for faster carving
 DOWNSIZE_WIDTH = 600                      # resized image width if SHOULD_DOWNSIZE is True
+DOWNSIZE_HEIGHT = 600
 ENERGY_MASK_CONST = 100000.0              # large energy value for protective masking
 MASK_THRESHOLD = 10                       # minimum pixel intensity for binary mask
 
@@ -28,11 +29,16 @@ def visualize(im, boolmask=None, rotate=False):
     return vis
 
 
-def resize(image, width):
-    dim = None
-    h, w = image.shape[:2]
-    dim = (width, int(h * width / float(w)))
-    return cv2.resize(image, dim)
+def resize(image, width = None, height = None):
+    if width:
+        dim = None
+        h, w = image.shape[:2]
+        dim = (width, int(h * width / float(w)))
+        return cv2.resize(image, dim)
+    if height:
+        h, w = image.shape[:2]
+        dim = (int(w*height/float(h)), height)
+        return cv2.resize(image, dim)
 
 
 def rotate_image(image, clockwise):
@@ -59,6 +65,28 @@ def remove_seam(im, boolmask):
     boolmask3c = np.stack([boolmask] * 3, axis=2)
     return im[boolmask3c].reshape((h, w - 1, 3))
 
+
+@jit
+def add_seam(im, seam_idx):
+
+    h, w = im.shape[:2]
+    output = np.zeros((h, w + 1, 3))
+    for row in range(h):
+        col = seam_idx[row]
+        for ch in range(3):
+            if col == 0:
+                p = np.average(im[row, col: col + 2, ch])
+                output[row, col, ch] = im[row, col, ch]
+                output[row, col + 1, ch] = p
+                output[row, col + 1:, ch] = im[row, col:, ch]
+            else:
+                p = np.average(im[row, col - 1: col + 1, ch])
+                output[row, : col, ch] = im[row, : col, ch]
+                output[row, col, ch] = p
+                output[row, col + 1:, ch] = im[row, col:, ch]
+                output[row, col + 1:, ch] = im[row, col:, ch]
+
+    return output
 
 @jit
 def get_minimum_seam(im):
@@ -104,9 +132,36 @@ def seams_removal(im, num_remove, vis=False, rot=False):
     for _ in range(num_remove):
         seam_idx, boolmask = get_minimum_seam(im)
         if vis:
-            pass
-            #visualize(im, boolmask, rotate=rot)
+            visualize(im, boolmask, rotate=rot)
         im = remove_seam(im, boolmask)
+    return im
+
+
+def seam_insertion(im, num_add, vis = False, rot = False):
+    seams_record = []
+    temp_im = im.copy()
+
+    for _ in range(num_add):
+        seam_idx, boolmask = get_minimum_seam(temp_im)
+        if vis:
+            visualize(temp_im, boolmask, rotate=rot)
+
+        seams_record.append(seam_idx)
+        temp_im = remove_seam(temp_im, boolmask)
+
+    seams_record.reverse()
+
+    for _ in range(num_add):
+        seam = seams_record.pop()
+        im = add_seam(im, seam)
+
+        if vis:
+            visualize(im, rotate=rot)
+
+        # update the remaining seam indices location in original image (2 seams added, 1 original and 1 duplicate)
+        for remaining_seam in seams_record:
+            remaining_seam[np.where(remaining_seam >= seam)] += 2
+
     return im
 
 
@@ -120,9 +175,17 @@ def seam_carve(im, dy, dx, vis=False):
     if dx < 0:
         output = seams_removal(output, -dx, vis)
 
+    elif dx > 0:
+        output = seam_insertion(output, dx, vis)
+
     if dy < 0:
         output = rotate_image(output, True)
         output = seams_removal(output, -dy, vis, rot=True)
+        output = rotate_image(output, False)
+
+    elif dy > 0:
+        output = rotate_image(output, True)
+        output = seam_insertion(output, dy, vis, rot=True)
         output = rotate_image(output, False)
 
     return output
@@ -137,9 +200,13 @@ def carve_main(image,height,width):
         im = imutils.url_to_image(IMAGE)
         h, w = im.shape[:2]
 
-        if SHOULD_DOWNSIZE and w > DOWNSIZE_WIDTH:
-            im = resize(im, width=DOWNSIZE_WIDTH)
-            h,w = im.shape[:2]
+        if SHOULD_DOWNSIZE:
+            if w > DOWNSIZE_WIDTH:
+                im = resize(im, width=DOWNSIZE_WIDTH)
+                h,w = im.shape[:2]
+            if h > DOWNSIZE_HEIGHT:
+                im = resize(im, height = DOWNSIZE_HEIGHT)
+                h,w = im.shape[:2]
 
         print("Height = {} and Width = {} \n".format(h, w))
 
@@ -148,20 +215,29 @@ def carve_main(image,height,width):
         new_h = height
         new_w = width
 
+        if new_w > w:
+            im = cv2.resize(im, (new_w,h))
+            h,w = im.shape[:2]
+
+        if new_h > h:
+            im = cv2.resize(im, (w, new_h))
+            h,w = im.shape[:2]
+
         if 0 < new_h <= h and 0 < new_w <= w:
             dy = new_h - h
             dx = new_w - w
 
-            output = seam_carve(im, dy, dx, True)
+            output = seam_carve(im, dy, dx, False)
 
             # cv2.imwrite(OUTPUT, output)
             # cv2.waitKey(0)
+            print("Complete")
 
             is_success, buffer = cv2.imencode(".jpg", output)
 
             return buffer
-
         else:
+            print("Error in new dimensions")
             raise ValueError
 
     except Exception as e:
