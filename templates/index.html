@@ -13,6 +13,14 @@
       <input type="text" onchange="loadFile(event)" name="width" id="wt" />
       <p>File</p>
       <input type="file" name="image" onchange="loadFile(event)" />
+        <p>Carving Technique</p>
+        <select name="algo" id="algo">
+            <option value="0">Seam Carving with Backward Energy</option>
+            <option value="1">Seam Carving with Forward Energy</option>
+            <option value="2">Column/Row Carving</option>
+            <option value="3">Pixel Carving</option>
+            <option value="4">Content Aware Croping</option>
+        </select>
 
         <input type="submit" name="submit">
 
